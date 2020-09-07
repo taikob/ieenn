@@ -18,6 +18,10 @@ elif args.condition_sw==1:
     path='condition/time_series.txt'
 elif args.condition_sw==2:
     path='condition/get_optical_flow.txt'
+elif args.condition_sw==3:
+    path='condition/traning.txt'
+elif args.condition_sw==4:
+    path='condition/traning_monochrome.txt'
 
 imagelist=natsorted(os.listdir('.'))
 
@@ -32,9 +36,9 @@ with open(path, mode='r') as f:
         line = f.readline().strip()
 
 for image in imagelist:
-    if os.path.isdir(image) and os.path.exists(image+'/test_list.txt'):
-        images=image+'/test_list.txt'
-        if args.fit_imagenum==1: input_len=sum([1 for _ in open(image+'/test_list.txt')])-1
+    if os.path.isdir(image) and os.path.exists(image+'/read_list.txt'):
+        images=image+'/read_list.txt'
+        if args.fit_imagenum==1: input_len=sum([1 for _ in open(image+'/read_list.txt')])-1
         tl=list()#time list
         savedir=image+'_'+str(datetime.now().strftime('%B%d  %H:%M:%S'))
         startt=time.time()

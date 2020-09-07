@@ -1,5 +1,5 @@
 from recalc import node_analysis as na
-from recalc import graph as gr
+from processing import graph as gr
 from recalc import evaluate as ev
 from util import dotmdf as dot
 import numpy as np

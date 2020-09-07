@@ -8,7 +8,7 @@ rootpath='runs'
 saveroot='stat'
 savepath=saveroot+'/'+str(datetime.now().strftime('%B%d  %H:%M:%S'))
 
-sw=1
+sw=2
 
 def readtitleparam(title):
 
@@ -22,12 +22,11 @@ def readtitleparam(title):
 
     return [re.findall(pattern, t)[0] for t in title]
 
-
-
-
 if sw==1:
     statdataneme='images/statdata_lk.csv'
     titledatanum=3
+elif sw==2:
+    statdataneme='images/intensity.csv'
 
 if not os.path.exists(savepath): os.makedirs(savepath)
 

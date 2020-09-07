@@ -9,22 +9,48 @@ from recalc import r_util as ru
 
 colormap = {'blue': [255, 0, 0], 'green': [0, 255, 0], 'red': [0, 0, 255],
             'yellow': [0, 255, 255], 'white': [255, 255, 255]}
-config = yaml.load(open('config.yaml'),Loader=yaml.SafeLoader)
+config = yaml.load(open('ieenn/config.yaml'),Loader=yaml.SafeLoader)
 
 def detect_rotmo(o,op,vec):#dimension of o and op must be 2
 
     opo=np.zeros(len(op))
 
     r=0
+    norm=0
     for i in range(len(op)):
         opo[i]=op[i]-o[i]
-        r+=opo[i]**2
+        r    +=opo[i]**2
+        norm +=vec[i]**2
 
-    r=np.sqrt(r)
-    if r !=0:
-        return (-vec[0]*opo[1] + vec[1]*opo[0]) /r
+    r   =np.sqrt(r)
+    norm=np.sqrt(norm)
+    if r !=0 and norm < r:
+        rotnorm=(-vec[0]*opo[1] + vec[1]*opo[0]) /r
+        if abs(rotnorm)/norm>=np.sqrt(2)/2:
+            return rotnorm
+        else:
+            return 0
     else:
         return 0
+
+def detect_errorflow(good_new, good_old):
+    angles=np.ndarray(0)
+    for i, (new, old) in enumerate(zip(good_new, good_old)):
+        a, b = new.ravel()
+        c, d = old.ravel()
+        dx = a - c
+        dy = b - d
+
+        th= np.arccos(dx/(np.sqrt(dx*dx+dy*dy)))
+
+        if dy > 0:
+            angles = np.append(angles, th)
+        else:
+            angles = np.append(angles, 2*np.pi-th)
+
+    return np.std(angles)
+
+
 
 
 def lucas_kanade(root,file1, file2,cc='yellow',lc='red',s=1,l=2, dtct_rm=None):
@@ -54,6 +80,8 @@ def lucas_kanade(root,file1, file2,cc='yellow',lc='red',s=1,l=2, dtct_rm=None):
     good_old = p0[st==1]
 
     # draw the tracks
+    std=detect_errorflow(good_new, good_old)
+
     data = []
     ofabs=np.ndarray(0)
     for i, (new, old) in enumerate(zip(good_new, good_old)):
@@ -65,18 +93,33 @@ def lucas_kanade(root,file1, file2,cc='yellow',lc='red',s=1,l=2, dtct_rm=None):
             norm=detect_rotmo(dtct_rm,[c,d],[dx,dy])
         else:
             norm=np.sqrt(dx**2+dy**2)
-        data.append([c, d, dx, dy, norm])
-        ofabs = np.append(ofabs, norm)
+        data.append([c, d, dx, dy,norm])
         dx = vs * dx
         dy = vs * dy
-        cv2.line  (mask, (c, d), (int(c + dx), int(d + dy)), colormap[lc],l)
-        cv2.line  (img2, (c, d), (int(c + dx), int(d + dy)), colormap[lc],l)
+        if norm==0:
+            cv2.line  (mask, (c, d), (int(c + dx), int(d + dy)), colormap['green'],l)
+            cv2.line  (img2, (c, d), (int(c + dx), int(d + dy)), colormap['green'],l)
+        else:
+            cv2.line  (mask, (c, d), (int(c + dx), int(d + dy)), colormap[lc],l)
+            cv2.line  (img2, (c, d), (int(c + dx), int(d + dy)), colormap[lc],l)
         cv2.circle(mask, (c, d), s, colormap[cc], -1)
         cv2.circle(img2, (c, d), s, colormap[cc], -1)
+        if norm==0: continue
+        else: ofabs = np.append(ofabs, norm)
 
     cv2.imwrite(os.path.join(root,'vectors_'+met+'.jpg'), mask)
     cv2.imwrite(os.path.join(root,'result_'+met+'.jpg'), img2)
-    stdata=np.array([ru.actsum(ofabs),ru.supsum(ofabs),ofabs.sum(), ofabs.mean(),ofabs.max(),len(ofabs)])
+    if np.count_nonzero(ofabs > 0)!=0:
+        aveact=ru.actsum(ofabs) / np.count_nonzero(ofabs > 0)
+    else:
+        aveact=0
+    if np.count_nonzero(ofabs < 0)!=0:
+        avesup=ru.supsum(ofabs) / np.count_nonzero(ofabs < 0)
+    else:
+        avesup=0
+    stdata=np.array([ru.actsum(ofabs),aveact, np.count_nonzero(ofabs > 0),
+                     ru.supsum(ofabs),avesup, np.count_nonzero(ofabs < 0),
+                     ofabs.sum(), ofabs.mean(),len(ofabs),std])
     np.savetxt(os.path.join(root,'statdata_'+met+'.csv'),stdata)
     with open(os.path.join(root,'data_'+met+'.csv'), 'w') as f:
         writer = csv.writer(f, lineterminator='\n')
@@ -145,7 +188,17 @@ def farneback(root,file1, file2,cc='yellow',lc='red',vs=4,s=1,l=2, dtct_rm=False
                     cv2.circle(frame2,(x, y), s, colormap[cc], -1)
             cv2.imwrite(os.path.join(root, 'vectors_fb.jpg'), mask)
             cv2.imwrite(os.path.join(root, 'result_fb.jpg'), frame2)
-            stdata=np.array([ofabs.sum(), ofabs.mean(),ofabs.max(),len(ofabs)])
+            if np.count_nonzero(ofabs > 0) != 0:
+                aveact = ru.actsum(ofabs) / np.count_nonzero(ofabs > 0)
+            else:
+                aveact = 0
+            if np.count_nonzero(ofabs < 0) != 0:
+                avesup = ru.supsum(ofabs) / np.count_nonzero(ofabs < 0)
+            else:
+                avesup = 0
+            stdata = np.array([ru.actsum(ofabs), aveact, np.count_nonzero(ofabs > 0),
+                               ru.supsum(ofabs), avesup, np.count_nonzero(ofabs < 0),
+                               ofabs.sum(), ofabs.mean(), len(ofabs)])
             np.savetxt(os.path.join(root,'statdata_fb.csv'),stdata)
             with open(os.path.join(root, 'data_fb.csv'), 'w') as f:
                 writer = csv.writer(f, lineterminator='\n')

@@ -6,6 +6,7 @@ from PIL import Image
 from main import save_nodedata as sn
 
 import chainer
+import cv2
 from chainer import cuda
 import chainer.links as L
 from chainer import optimizers
@@ -22,7 +23,11 @@ def load_list(path, root):
     return tuples
 
 def read_image(path, size, offset):
-    image = np.asarray(Image.open(path)).transpose(2, 0, 1)
+    image=np.asarray(Image.open(path))
+    if image.ndim == 2:
+        image = image[np.newaxis, :, :]
+    else:
+        image = image.transpose(2, 0, 1)
     top = offset[1] + (image.shape[1]  - size[1]) / 2
     left = offset[0] + (image.shape[2]  - size[0]) / 2
     bottom = size[1] + top
@@ -33,10 +38,15 @@ def read_image(path, size, offset):
 
 def write_image(image, path):
     image *= 255
-    image = image.transpose(1, 2, 0)
-    image = image.astype(np.uint8)
-    result = Image.fromarray(image)
-    result.save(path)
+    if image.shape[0]!=1:
+    	image = image.transpose(1, 2, 0)
+        image = image.astype(np.uint8)
+        result = Image.fromarray(image)
+        result.save(path)
+    else:
+    	image = image.transpose(1, 2, 0)
+        image = image.astype(np.uint8)
+        cv2.imwrite(path,image)
 
 def prepare_PredNet(savedir):
 
@@ -185,7 +195,8 @@ def run_PredNet(images='', sequences='', gpu=-1, root='.', initmodel='', resume=
                 y_batch[0] = read_image(imagelist[i], size, offset);
                 loss += model(chainer.Variable(xp.asarray(x_batch)),
                               chainer.Variable(xp.asarray(y_batch)))
-
+                if i!=0:
+                    prediction_error=np.append(prediction_error,np.sum(abs(x_batch[0].copy() - chainer.cuda.to_cpu(model.y.data[0].copy()))))
                 print('frameNo:' + str(i))
                 if (i + 1) % bprop == 0:
                     model.zerograds()
