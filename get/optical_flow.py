@@ -5,11 +5,12 @@ import itertools
 import csv
 import numpy as np
 from recalc import r_util as ru
+from util import util as u
 
 
 colormap = {'blue': [255, 0, 0], 'green': [0, 255, 0], 'red': [0, 0, 255],
             'yellow': [0, 255, 255], 'white': [255, 255, 255]}
-config = yaml.load(open('ieenn/config.yaml'),Loader=yaml.SafeLoader)
+config = yaml.load(open(u.getdir(__file__)+'config/config.yaml'),Loader=yaml.SafeLoader)
 
 def detect_rotmo(o,op,vec):#dimension of o and op must be 2
 
@@ -33,7 +34,7 @@ def detect_rotmo(o,op,vec):#dimension of o and op must be 2
     else:
         return 0
 
-def detect_errorflow(good_new, good_old):
+def detect_errorflow(o,good_new, good_old):
     angles=np.ndarray(0)
     for i, (new, old) in enumerate(zip(good_new, good_old)):
         a, b = new.ravel()
@@ -41,17 +42,29 @@ def detect_errorflow(good_new, good_old):
         dx = a - c
         dy = b - d
 
-        th= np.arccos(dx/(np.sqrt(dx*dx+dy*dy)))
+        op=[c, d]
+        vec=[dx,dy]
+        opo = np.zeros(2)
 
-        if dy > 0:
-            angles = np.append(angles, th)
-        else:
-            angles = np.append(angles, 2*np.pi-th)
+        r = 0
+        norm = 0
+        for i in range(2):
+            opo[i] = op[i] - o[i]
+            r += opo[i] ** 2
+
+        r = np.sqrt(r)
+        if r == 0: continue
+
+        rotnorm = [-opo[1] / r, opo[0] / r]
+
+        nr = rotnorm[0]*vec[0] + rotnorm[1]*vec[1]
+        dnr= np.sqrt(rotnorm[0]**2 + rotnorm[1]**2) * np.sqrt(vec[0]**2 + vec[1]**2)
+
+        th= np.arccos(1.0-abs(nr/dnr))
+
+        angles = np.append(angles, th)
 
     return np.std(angles)
-
-
-
 
 def lucas_kanade(root,file1, file2,cc='yellow',lc='red',s=1,l=2, dtct_rm=None):
     conf = config['LucasKanade']
@@ -74,56 +87,64 @@ def lucas_kanade(root,file1, file2,cc='yellow',lc='red',s=1,l=2, dtct_rm=None):
     vs=50
     p0 = cv2.goodFeaturesToTrack(img1_gray, mask = None, **feature_params)
     mask = np.zeros_like(img1)
-    p1, st, err = cv2.calcOpticalFlowPyrLK(img1_gray, img2_gray, p0, None, **lk_params)
+    try:
+        p1, st, err = cv2.calcOpticalFlowPyrLK(img1_gray, img2_gray, p0, None, **lk_params)
 
-    good_new = p1[st==1]
-    good_old = p0[st==1]
+        good_new = p1[st==1]
+        good_old = p0[st==1]
 
-    # draw the tracks
-    std=detect_errorflow(good_new, good_old)
-
-    data = []
-    ofabs=np.ndarray(0)
-    for i, (new, old) in enumerate(zip(good_new, good_old)):
-        a, b = new.ravel()
-        c, d = old.ravel()
-        dx = a - c
-        dy = b - d
+        # draw the tracks
         if dtct_rm is not None:
-            norm=detect_rotmo(dtct_rm,[c,d],[dx,dy])
+            std=detect_errorflow(dtct_rm,good_new, good_old)
         else:
-            norm=np.sqrt(dx**2+dy**2)
-        data.append([c, d, dx, dy,norm])
-        dx = vs * dx
-        dy = vs * dy
-        if norm==0:
-            cv2.line  (mask, (c, d), (int(c + dx), int(d + dy)), colormap['green'],l)
-            cv2.line  (img2, (c, d), (int(c + dx), int(d + dy)), colormap['green'],l)
-        else:
-            cv2.line  (mask, (c, d), (int(c + dx), int(d + dy)), colormap[lc],l)
-            cv2.line  (img2, (c, d), (int(c + dx), int(d + dy)), colormap[lc],l)
-        cv2.circle(mask, (c, d), s, colormap[cc], -1)
-        cv2.circle(img2, (c, d), s, colormap[cc], -1)
-        if norm==0: continue
-        else: ofabs = np.append(ofabs, norm)
+            std=0
 
-    cv2.imwrite(os.path.join(root,'vectors_'+met+'.jpg'), mask)
-    cv2.imwrite(os.path.join(root,'result_'+met+'.jpg'), img2)
-    if np.count_nonzero(ofabs > 0)!=0:
-        aveact=ru.actsum(ofabs) / np.count_nonzero(ofabs > 0)
-    else:
-        aveact=0
-    if np.count_nonzero(ofabs < 0)!=0:
-        avesup=ru.supsum(ofabs) / np.count_nonzero(ofabs < 0)
-    else:
-        avesup=0
-    stdata=np.array([ru.actsum(ofabs),aveact, np.count_nonzero(ofabs > 0),
-                     ru.supsum(ofabs),avesup, np.count_nonzero(ofabs < 0),
-                     ofabs.sum(), ofabs.mean(),len(ofabs),std])
+        data = []
+        ofabs=np.ndarray(0)
+        for i, (new, old) in enumerate(zip(good_new, good_old)):
+            a, b = new.ravel()
+            c, d = old.ravel()
+            dx = a - c
+            dy = b - d
+            if dtct_rm is not None:
+                norm=detect_rotmo(dtct_rm,[c,d],[dx,dy])
+            else:
+                norm=np.sqrt(dx**2+dy**2)
+            data.append([c, d, dx, dy,norm])
+            dx = vs * dx
+            dy = vs * dy
+            if norm==0:
+                cv2.line  (mask, (c, d), (int(c + dx), int(d + dy)), colormap['green'],l)
+                cv2.line  (img2, (c, d), (int(c + dx), int(d + dy)), colormap['green'],l)
+            else:
+                cv2.line  (mask, (c, d), (int(c + dx), int(d + dy)), colormap[lc],l)
+                cv2.line  (img2, (c, d), (int(c + dx), int(d + dy)), colormap[lc],l)
+            cv2.circle(mask, (c, d), s, colormap[cc], -1)
+            cv2.circle(img2, (c, d), s, colormap[cc], -1)
+            if norm==0: continue
+            else: ofabs = np.append(ofabs, norm)
+
+        cv2.imwrite(os.path.join(root,'vectors_'+met+'.jpg'), mask)
+        cv2.imwrite(os.path.join(root,'result_'+met+'.jpg'), img2)
+        if np.count_nonzero(ofabs > 0)!=0:
+            aveact=ru.actsum(ofabs) / np.count_nonzero(ofabs > 0)
+        else:
+            aveact=0
+        if np.count_nonzero(ofabs < 0)!=0:
+            avesup=ru.supsum(ofabs) / np.count_nonzero(ofabs < 0)
+        else:
+            avesup=0
+        stdata=np.array([ru.actsum(ofabs),aveact, np.count_nonzero(ofabs > 0),
+                         ru.supsum(ofabs),avesup, np.count_nonzero(ofabs < 0),
+                         ofabs.sum(), ofabs.mean(),len(ofabs),std])
+
+        with open(os.path.join(root, 'data_' + met + '.csv'), 'w') as f:
+            writer = csv.writer(f, lineterminator='\n')
+            writer.writerows(data)
+
+    except:
+        stdata=np.array([0,0,0,0,0,0,0,0])
     np.savetxt(os.path.join(root,'statdata_'+met+'.csv'),stdata)
-    with open(os.path.join(root,'data_'+met+'.csv'), 'w') as f:
-        writer = csv.writer(f, lineterminator='\n')
-        writer.writerows(data)
 
 def farneback(root,file1, file2,cc='yellow',lc='red',vs=4,s=1,l=2, dtct_rm=False):
     conf = config['Farneback']

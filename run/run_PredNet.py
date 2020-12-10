@@ -1,9 +1,10 @@
 import os
 from datetime import datetime
 import numpy as np
-from main import node_monitor as nm
+from run import node_monitor as nm
 from PIL import Image
-from main import save_nodedata as sn
+from run import save_nodedata as sn
+from util import util as u
 
 import chainer
 import cv2
@@ -48,13 +49,14 @@ def write_image(image, path):
         image = image.astype(np.uint8)
         cv2.imwrite(path,image)
 
-def prepare_PredNet(savedir):
+def prepare_PredNet(savedir,test,initmodel):
 
-    if not os.path.exists('runs'):
-        os.makedirs('runs')
+    rootpath =  u.getdir(__file__).replace('ieenn/run','PredNet/')
 
-    save_root = 'runs/' + savedir
-    os.makedirs(save_root+'/models')  # made models
+    if test==True:
+        save_root = initmodel.replace('model.model','runs/') + savedir
+    else:
+        save_root = rootpath + savedir
     os.makedirs(save_root+'/images')  # output images
     os.makedirs(save_root+'/act')     # node activation
 
@@ -69,7 +71,7 @@ def run_PredNet(images='', sequences='', gpu=-1, root='.', initmodel='', resume=
         exit()
 
     # make folder
-    save_root=prepare_PredNet(savedir)
+    save_root=prepare_PredNet(savedir,test,initmodel)
 
     #save condition
     with open(save_root + '/run_condition.txt', mode='w') as f:
@@ -131,10 +133,11 @@ def run_PredNet(images='', sequences='', gpu=-1, root='.', initmodel='', resume=
     else:      sequencelist = load_list(sequences, root)
 
     prediction_error=np.empty(0)
+    stimuliroot=u.getdir(__file__).replace('ieenn/run/','stimuli')
     # run PredNet
     if test == True:
         for seq in range(len(sequencelist)):
-            imagelist = load_list(sequencelist[seq], root)
+            imagelist = load_list(sequencelist[seq], stimuliroot)
             prednet.reset_state()
             loss = 0
             batchSize = 1
@@ -180,7 +183,7 @@ def run_PredNet(images='', sequences='', gpu=-1, root='.', initmodel='', resume=
         count = 0
         seq = 0
         while count < period:
-            imagelist = load_list(sequencelist[seq], root)
+            imagelist = load_list(sequencelist[seq], stimuliroot)
             prednet.reset_state()
             loss = 0
 
@@ -191,7 +194,7 @@ def run_PredNet(images='', sequences='', gpu=-1, root='.', initmodel='', resume=
                 print("Not found images.")
                 break
             x_batch[0] = read_image(imagelist[0], size, offset);
-            for i in range(1, len(imagelist)):
+            for i in range(0, len(imagelist)):
                 y_batch[0] = read_image(imagelist[i], size, offset);
                 loss += model(chainer.Variable(xp.asarray(x_batch)),
                               chainer.Variable(xp.asarray(y_batch)))
@@ -213,16 +216,18 @@ def run_PredNet(images='', sequences='', gpu=-1, root='.', initmodel='', resume=
                     print('loss:' + str(float(model.loss.data)))
                     logf.write(str(i) + ', ' + str(float(model.loss.data)) + '\n')
 
-                if (count % save) == 0:
+                if ((count+1) % save) == 0 or count==0:
+                    os.makedirs(save_root+'/'+ str(count))  # made models
                     print('save the model')
-                    serializers.save_npz(save_root+'/models/' + str(count) + '.model', model)
+                    serializers.save_npz(save_root+'/'+ str(count) +'/model.model', model)
                     print('save the optimizer')
-                    serializers.save_npz(save_root+'/models/' + str(count) + '.state', optimizer)
+                    serializers.save_npz(save_root+'/'+ str(count) +'/model.state', optimizer)
 
                 x_batch[0] = y_batch[0]
                 count += 1
 
             seq = (seq + 1) % len(sequencelist)
+
 
     return prediction_error
 

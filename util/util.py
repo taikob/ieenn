@@ -89,3 +89,6 @@ def Prime_factorization(ch, hor=1, ver=1):
             md = abs(n - m)
 
     return och, ocv
+
+def getdir(dir):
+    return dir.replace(dir.split('/')[-1],'')

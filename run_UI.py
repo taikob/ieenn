@@ -4,26 +4,32 @@ import argparse
 import numpy as np
 from datetime import datetime
 from natsort import natsorted
-from main import run_PredNet as r
+from run import run_PredNet as r
+from util import util as u
 
-parser = argparse.ArgumentParser(description='PredNet_UI')
-parser.add_argument('--condition_sw', '-sw', default=1,  type=int, help='condition')
+parser = argparse.ArgumentParser(description='run_UI')
+parser.add_argument('--config_sw', '-sw', default=1,  type=int, help='config')
 parser.add_argument('--fit_imagenum', '-fimn', default=1,  type=int, help='fit image number')
+parser.add_argument('--model', '-m', default='',  type=str, help='initmodel')
+parser.add_argument('--stimuli', '-s', default=None,  type=str, help='stimuli')
 parser.set_defaults(test=False)
 args = parser.parse_args()
 
-if args.condition_sw==0:
-    path='condition/test.txt'
-elif args.condition_sw==1:
-    path='condition/time_series.txt'
-elif args.condition_sw==2:
-    path='condition/get_optical_flow.txt'
-elif args.condition_sw==3:
-    path='condition/traning.txt'
-elif args.condition_sw==4:
-    path='condition/traning_monochrome.txt'
+path=u.getdir(__file__)+'run/config/'+str(args.config_sw)+'.txt'
 
-imagelist=natsorted(os.listdir('.'))
+#switch
+#0: test
+#1: time_series
+#2: get_optical_flow
+#3: traning
+#4: traning_monochrome
+#5: get_optical_flow_monochrome
+
+rootpath=u.getdir(__file__).replace('ieenn/','stimuli')
+if args.stimuli is not None:
+    imagelist=[args.stimuli]
+else:
+    imagelist=natsorted(os.listdir(rootpath))
 
 with open(path, mode='r') as f:
     line = f.readline().strip()
@@ -36,18 +42,20 @@ with open(path, mode='r') as f:
         line = f.readline().strip()
 
 for image in imagelist:
-    if os.path.isdir(image) and os.path.exists(image+'/read_list.txt'):
-        images=image+'/read_list.txt'
+    images = rootpath+'/' + image + '/read_list.txt'
+    image=rootpath+'/'+image
+    if os.path.isdir(image) and os.path.exists(images):
         if args.fit_imagenum==1: input_len=sum([1 for _ in open(image+'/read_list.txt')])-1
+        if args.model is not None: initmodel=args.model
         tl=list()#time list
-        savedir=image+'_'+str(datetime.now().strftime('%B%d  %H:%M:%S'))
+        savedir=image.replace(rootpath,'')+'_'+str(datetime.now().strftime('%B%d  %H:%M:%S'))
         startt=time.time()
 
         print(image+'_start')
         prediction_error=r.run_PredNet(images, sequences, gpu, root, initmodel, resume, \
                       size, channels, offset, input_len, ext, bprop, save, period, test, savedir)
 
-        savedir = 'runs/' + savedir
+        savedir = u.getdir(__file__).replace('ieenn/', 'PredNet/') + savedir
         np.savetxt(savedir+'/prediction_error.csv',prediction_error)
 
         with open(savedir + '/runtime.txt', mode='a') as f:

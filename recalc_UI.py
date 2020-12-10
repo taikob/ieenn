@@ -1,20 +1,44 @@
+import os
+import argparse
+import numpy as np
 from recalc import node_analysis as na
 from processing import graph as gr
 from recalc import evaluate as ev
 from util import dotmdf as dot
-import numpy as np
-import os
+from util import util as u
 
-group_list=['analysis/analysis_group/circle.txt']#'analysis_group/stripes.txt','analysis_group/angle.txt','analysis_group/rotating.txt','analysis_group/moving.txt']
-params=['nodemax','nodesum','nodevar','nodemin','nodeabsmin','nodeactsum','nodesupsum']
-anapath=['June23  21:23:58','June23  21:49:32']
+parser = argparse.ArgumentParser(description='recalc_UI')
+parser.add_argument('--config_sw', '-sw', type=int, help='config')
+parser.add_argument('--test_sw', '-tsw', type=int, help='test')
+parser.add_argument('--model', '-model', type=str, help='modelpath')
+parser.add_argument('--group_list', '-gl', type=str, help='group_list')
+parser.add_argument('--params', '-prm', type=str, help='params')
+parser.add_argument('--anapath', '-ap', type=str, help='anapath')
+parser.set_defaults(test=False)
+args = parser.parse_args()
 
+#switch
+#1: ???
+#2: ???
+#3: ???
+
+path=u.getdir(__file__)+'recalc/config/'+str(args.config_sw)+'.txt'
+
+with open(path, mode='r') as f:
+    line = f.readline().strip()
+    while line:
+        s=line.split(' ')
+        if len(s)==2:
+            if s[1].isdigit():exec(s[0] + '=int(s[1])')
+            else: exec(s[0] + '=s[1]')
+        else: exec(s[0] + '=None')
+        line = f.readline().strip()
 
 savelist=list()
 explist=list()
-test=3
-if test==1:
-    for group in group_list:
+
+if args.test==1:
+    for group in args.group_list:
         exp=list()
         num=list()
         with open(group) as f:
@@ -32,35 +56,35 @@ if test==1:
         print(group+'_allanalysis')
         na.all_analysis(explist, 1)
 
-elif test==2:
+elif args.test==2:
 
     print('start_group_plot')
-    for param in params:
-        graphpath=na.graphdata_make(anapath,param,sw=0)
+    for param in args.params:
+        graphpath=na.graphdata_make(args.anapath,param,sw=0)
         gr.graph_plot(graphpath)
-        graphpath=na.graphdata_make(anapath,param,sw=1)
+        graphpath=na.graphdata_make(args.anapath,param,sw=1)
         gr.graph_plot(graphpath)
 
     print('start_data_plot')
     if len(savelist)!=1:
         for savepath in savelist:
-            for param in params:
+            for param in args.params:
 
-                graphpath=na.graphdata_make(anapath,param,sw=0)
+                graphpath=na.graphdata_make(args.anapath,param,sw=0)
                 gr.graph_plot(graphpath)
 
-                graphpath=na.graphdata_make(anapath,param,sw=1)
+                graphpath=na.graphdata_make(args.anapath,param,sw=1)
                 gr.graph_plot(graphpath)
 
-elif test==3:
+elif args.test==3:
     switch=[1]
     for sw in switch:
-        list1=ev.listup(anapath[0], 1)
-        list2=ev.listup(anapath[1], 3)#, secondpath=anapath[1])
+        list1=ev.listup(args.anapath[0], 1)
+        list2=ev.listup(args.anapath[1], 3)#, secondpath=anapath[1])
         clist=ev.complist(list1, list2, listup='eq')
         #clist=[list1]
 
-        for ana in anapath:
+        for ana in args.anapath:
             with open('analysis/' + ana + '/namelist.csv', mode='r') as f:
                 w=1
                 while w:
@@ -87,6 +111,6 @@ elif test==3:
                 if len(cl[key]):
                     savefol=saveroot+'/'+key.split('/')[0]
                     if not os.path.exists(savefol): os.makedirs(savefol)
-                    y=gr.evaluated_channel('analysis/' + anapath[0], key, cl[key], sw)#, x=xc)
+                    y=gr.evaluated_channel('analysis/' + args.anapath[0], key, cl[key], sw)#, x=xc)
                     np.savetxt(saveroot+'/'+key+'.csv', y, header=','.join(cl[key]))
             gr.graph_plot(saveroot,defi=1)
